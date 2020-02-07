@@ -15,7 +15,7 @@ fn main() -> PyResult<()> {
     let music = load_music(gil.python(), filename)?;
     let beats: Vec<f32> = find_beats(gil.python(), music)?;
     let intervals: Vec<u64> = beats_to_intervals(beats);
-    play_beats(&sink, beat_file, intervals);
+    append_beats(&sink, beat_file, intervals);
     sink.sleep_until_end();
     Ok(())
 }
@@ -59,7 +59,7 @@ fn find_beats(py: Python, music: Vec<f32>) -> PyResult<Vec<f32>> {
         .extract::<Vec<f32>>(py)
 }
 
-fn play_beats(sink: &Sink, beat_file: File, intervals: Vec<u64>) {
+fn append_beats(sink: &Sink, beat_file: File, intervals: Vec<u64>) {
     let intervals = intervals.into_iter();
     let source = rodio::Decoder::new(BufReader::new(beat_file))
         .unwrap()
