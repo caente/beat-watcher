@@ -1,6 +1,7 @@
 use cpython::{PyDict, PyResult, Python};
 use rodio::Sink;
 use rodio::Source;
+use std::fs::File;
 use std::io::BufReader;
 use std::time::Duration;
 
@@ -8,12 +9,13 @@ fn main() -> PyResult<()> {
     let gil = Python::acquire_gil();
     let device = rodio::default_output_device().unwrap();
     let sink = Sink::new(&device);
+    let beat_file = File::open("data/beat.wav").unwrap();
 
     let filename = "data/Pop-Rock-Loop1.wav";
     let music = load_music(gil.python(), filename)?;
     let beats: Vec<f32> = find_beats(gil.python(), music)?;
     let intervals: Vec<u64> = beats_to_intervals(beats);
-    play_beats(&sink, intervals);
+    play_beats(&sink, beat_file, intervals);
     sink.sleep_until_end();
     Ok(())
 }
@@ -57,13 +59,13 @@ fn find_beats(py: Python, music: Vec<f32>) -> PyResult<Vec<f32>> {
         .extract::<Vec<f32>>(py)
 }
 
-fn play_beats(sink: &Sink, intervals: Vec<u64>) {
-    let file = std::fs::File::open("data/beat.wav").unwrap();
-    let source = rodio::Decoder::new(BufReader::new(file))
+fn play_beats(sink: &Sink, beat_file: File, intervals: Vec<u64>) {
+    let intervals = intervals.into_iter();
+    let source = rodio::Decoder::new(BufReader::new(beat_file))
         .unwrap()
         .buffered();
-    intervals.iter().for_each(|interval| {
-        let s = source.clone().delay(Duration::from_millis(*interval));
-        sink.append(s);
+    let it = intervals.map(move |interval| {
+         source.clone().delay(Duration::from_millis(interval))
     });
+    sink.append(rodio::source::from_iter(it));
 }
