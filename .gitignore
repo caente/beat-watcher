@@ -1,2 +1,8 @@
 /target
 **/*.rs.bk
+.idea/beat-watcher.iml
+.idea/modules.xml
+.idea/workspace.xml
+.idea/codeStyles/codeStyleConfig.xml
+.metals/metals.h2.db
+.metals/metals.log
