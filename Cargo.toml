@@ -9,3 +9,5 @@ edition = "2018"
 [dependencies]
 rodio = "0.10.0"
 cpython = "0.4"
+ggez = "0.5"
+rand = "0.7"

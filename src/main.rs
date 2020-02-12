@@ -1,72 +1,68 @@
-use std::fs::File;
-use std::io::BufReader;
-use std::time::Duration;
+use ggez;
+use ggez::event;
+use ggez::graphics;
+use ggez::nalgebra as na;
 
-use cpython::{PyDict, PyResult, Python};
-use rodio::Sink;
-use rodio::Source;
+mod beats;
 
-fn main() -> PyResult<()> {
-    let gil = Python::acquire_gil();
-    let device = rodio::default_output_device().unwrap();
-    let sink = Sink::new(&device);
-    let beat_file = File::open("data/beat.wav").unwrap();
-
-    let filename = "data/Pop-Rock-Loop1.wav";
-    let music = load_music(gil.python(), filename)?;
-    let beats: Vec<f32> = find_beats(gil.python(), music)?;
-    let intervals: Vec<u64> = beats_to_intervals(beats);
-    append_beats(&sink, beat_file, intervals);
-    sink.sleep_until_end();
-    Ok(())
+struct MainState {
+    pos_x: f32,
+    progression: Vec<u64>,
 }
 
-fn beats_to_intervals(beats: Vec<f32>) -> Vec<u64> {
-    let mut intervals: Vec<u64> = vec![];
-    for i in 0..(beats.len() - 1) {
-        let interval = beats[i + 1] - beats[i];
-        intervals.push((interval * 1000.0) as u64);
+impl MainState {
+    fn new() -> ggez::GameResult<MainState> {
+        //let filename = "data/Pop-Rock-Loop1.wav";
+        //let mut progression = beats::find_beats(filename).unwrap();
+        let _progression: Vec<f32> = vec![
+            16.13, 15.63, 15.13, 14.62, 14.12, 13.62, 13.11, 12.61, 12.1, 11.6, 11.09, 10.59,
+            10.09, 9.58, 9.08, 8.57, 8.07, 7.57, 7.06, 6.56, 6.05, 5.55, 5.05, 4.54, 4.04, 3.53,
+            3.03, 2.52, 2.02, 1.52, 1.01, 0.51, 0.01,
+        ];
+        let progression = beats::beats_to_intervals(_progression, 50.0);
+        println!("{:?}", progression);
+        let max = progression.first().unwrap();
+        let s = MainState {
+            pos_x: 0.0,
+            progression,
+        };
+        Ok(s)
     }
-    intervals
-}
-fn load_music(py: Python, filename: &str) -> PyResult<Vec<f32>> {
-    let locals = PyDict::new(py);
-    locals.set_item(py, "filename", filename)?;
-    locals.set_item(py, "librosa", py.import("librosa")?)?;
-    let (music, _) = py
-        .eval("librosa.load(filename)", None, Some(&locals))?
-        .extract::<(Vec<f32>, usize)>(py)?;
-    Ok(music)
-}
-fn find_beats(py: Python, music: Vec<f32>) -> PyResult<Vec<f32>> {
-    let locals = PyDict::new(py);
-    locals.set_item(py, "madmom", py.import("madmom")?)?;
-    locals.set_item(py, "np", py.import("numpy")?)?;
-    locals.set_item(py, "music", &music)?;
-    locals.set_item(py, "fps", 100)?;
-    let proc = py.eval(
-        "madmom.features.beats.DBNBeatTrackingProcessor(fps=fps)",
-        None,
-        Some(&locals),
-    )?;
-    locals.set_item(py, "proc", &proc)?;
-    let act = py.eval(
-        "madmom.features.beats.RNNBeatProcessor()(np.array(music))",
-        None,
-        Some(&locals),
-    )?;
-    locals.set_item(py, "act", &act)?;
-    py.eval("proc(act)", None, Some(&locals))?
-        .extract::<Vec<f32>>(py)
 }
 
-fn append_beats(sink: &Sink, beat_file: File, intervals: Vec<u64>) {
-    let intervals = intervals.into_iter();
-    let source = rodio::Decoder::new(BufReader::new(beat_file))
-        .unwrap()
-        .buffered();
-    let it = intervals.map(move |interval| {
-         source.clone().delay(Duration::from_millis(interval))
-    });
-    sink.append(rodio::source::from_iter(it));
+impl event::EventHandler for MainState {
+    fn update(&mut self, _ctx: &mut ggez::Context) -> ggez::GameResult {
+        match self.progression.pop() {
+            Some(interval) => {
+                self.pos_x = self.pos_x + interval as f32;
+                println!("{} -> {}",self.pos_x, self.pos_x + interval as f32);
+            }
+            None => (),
+        }
+        Ok(())
+    }
+
+    fn draw(&mut self, ctx: &mut ggez::Context) -> ggez::GameResult {
+        graphics::clear(ctx, [0.1, 0.2, 0.3, 1.0].into());
+
+        let circle = graphics::Mesh::new_circle(
+            ctx,
+            graphics::DrawMode::fill(),
+            na::Point2::new(self.pos_x, 380.0),
+            10.0,
+            2.0,
+            graphics::WHITE,
+        )?;
+        graphics::draw(ctx, &circle, (na::Point2::new(0.0, 0.0),))?;
+
+        graphics::present(ctx)?;
+        Ok(())
+    }
+}
+
+pub fn main() -> ggez::GameResult {
+    let cb = ggez::ContextBuilder::new("super_simple", "ggez");
+    let (ctx, event_loop) = &mut cb.build()?;
+    let state = &mut MainState::new()?;
+    event::run(ctx, event_loop, state)
 }
